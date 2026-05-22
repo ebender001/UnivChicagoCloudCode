@@ -1,0 +1,36 @@
+name: Deploy to Back4App
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Setup Parse CLI
+        run: npm install -g parse-cli
+
+      - name: Create Parse config
+        run: |
+          mkdir -p ~/.parse
+          cat > .parse.project << 'EOF'
+          {
+            "projectName": "UnivChicagoCloudCode",
+            "appId": "${{ secrets.B4A_APP_ID }}"
+          }
+          EOF
+          cat > .parse.local << 'EOF'
+          {
+            "${{ secrets.B4A_APP_ID }}": {
+              "masterKey": "${{ secrets.B4A_MASTER_KEY }}"
+            }
+          }
+          EOF
+
+      - name: Deploy to Back4App
+        run: parse deploy
