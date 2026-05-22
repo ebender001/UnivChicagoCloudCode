@@ -12,12 +12,23 @@ jobs:
     steps:
       - uses: actions/checkout@v3
 
-      - name: Setup Parse CLI
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+
+      - name: Install Back4App CLI
         run: npm install -g parse-cli
 
-      - name: Create Parse config
+      - name: Verify B4A credentials
         run: |
-          mkdir -p ~/.parse
+          echo "App ID: ${{ secrets.B4A_APP_ID }}"
+          echo "Master Key length: ${#B4A_MASTER_KEY}"
+        env:
+          B4A_MASTER_KEY: ${{ secrets.B4A_MASTER_KEY }}
+
+      - name: Create Parse configuration
+        run: |
           cat > .parse.project << 'EOF'
           {
             "projectName": "UnivChicagoCloudCode",
@@ -31,6 +42,10 @@ jobs:
             }
           }
           EOF
+          echo "Parse config files created"
+          cat .parse.project
 
-      - name: Deploy to Back4App
+      - name: Deploy Cloud Code to Back4App
         run: parse deploy
+        env:
+          HOME: /home/runner
