@@ -17,13 +17,19 @@ jobs:
         with:
           node-version: '20'
 
-      - name: Install Back4App CLI
-        run: npm install -g parse-cli
+      - name: Install Back4App CLI via Homebrew
+        run: |
+          brew tap back4app/cli
+          brew install back4app-cli
+        continue-on-error: true
+
+      - name: Install Back4App CLI via npm
+        run: |
+          npm install -g @back4app/cli
+        continue-on-error: true
 
       - name: Verify CLI Installation
         run: |
-          which parse
-          parse --version
           which b4a
           b4a --version
 
@@ -44,8 +50,8 @@ jobs:
           EOF
           echo "=== Parse Project Config ==="
           cat .parse.project
-          echo "=== Parse Local Config ==="
-          ls -la .parse.local
+          echo "=== Parse Local Config (keys redacted) ==="
+          wc -l .parse.local
 
       - name: List Cloud Code Files
         run: |
@@ -56,7 +62,7 @@ jobs:
 
       - name: Deploy Cloud Code to Back4App
         run: |
-          echo "Starting deployment..."
-          parse deploy --verbose
+          echo "Starting deployment with b4a..."
+          b4a deploy --verbose
         env:
           HOME: /home/runner
