@@ -10,22 +10,22 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - name: Setup Node.js
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         with:
-          node-version: '18'
+          node-version: '20'
 
       - name: Install Back4App CLI
         run: npm install -g parse-cli
 
-      - name: Verify B4A credentials
+      - name: Verify CLI Installation
         run: |
-          echo "App ID: ${{ secrets.B4A_APP_ID }}"
-          echo "Master Key length: ${#B4A_MASTER_KEY}"
-        env:
-          B4A_MASTER_KEY: ${{ secrets.B4A_MASTER_KEY }}
+          which parse
+          parse --version
+          which b4a
+          b4a --version
 
       - name: Create Parse configuration
         run: |
@@ -42,10 +42,21 @@ jobs:
             }
           }
           EOF
-          echo "Parse config files created"
+          echo "=== Parse Project Config ==="
           cat .parse.project
+          echo "=== Parse Local Config ==="
+          ls -la .parse.local
+
+      - name: List Cloud Code Files
+        run: |
+          echo "=== Cloud Code Directory ==="
+          ls -la cloud/
+          echo "=== Repository Root ==="
+          ls -la
 
       - name: Deploy Cloud Code to Back4App
-        run: parse deploy
+        run: |
+          echo "Starting deployment..."
+          parse deploy --verbose
         env:
           HOME: /home/runner
