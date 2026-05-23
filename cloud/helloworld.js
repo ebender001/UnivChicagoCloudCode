@@ -1,1 +1,3 @@
-console.log("Hello, World!");
+Parse.Cloud.define("helloWorld", (request) => {
+	return "Hello world from Back4App!";
+});

@@ -3,3 +3,5 @@ node_modules/
 *.log
 .env
 .env.local
+.parse.local
+.parse.project
