@@ -1,9 +1,5 @@
 
-// Use Parse.Cloud.define to define as many cloud functions as you want.
-// For example:
+//Entry point for the cloud code. All cloud code should be required from this file
 require("./src/login.js");
 require("./src/saveSurveyResults.js");
 
-Parse.Cloud.define("hello", (request) => {
-	return "Hello world!";
-});
