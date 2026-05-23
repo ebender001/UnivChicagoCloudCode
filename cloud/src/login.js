@@ -1,25 +1,70 @@
 Parse.Cloud.define("login", async (request) => {
 	const { username, password } = request.params || {};
 
-	if (!username || typeof username !== "string") {
+	if (!username || typeof username !== "string" || !username.trim()) {
 		throw new Parse.Error(Parse.Error.VALIDATION_ERROR, "Username is required.");
 	}
 
-	if (!password || typeof password !== "string") {
+	if (!password || typeof password !== "string" || !password) {
 		throw new Parse.Error(Parse.Error.VALIDATION_ERROR, "Password is required.");
 	}
 
-	const user = await Parse.User.logIn(username, password);
+	const loginName = username.trim();
+	let user;
 
-	await user.fetchWithInclude(["institution", "specialty"]);
+	try {
+		user = await Parse.User.logIn(loginName, password);
+	} catch (error) {
+		console.log("Login failed with submitted username.", {
+			code: error.code,
+			username: loginName
+		});
 
-	const institution = user.get("institution");
-	const specialty = user.get("specialty");
+		if (!loginName.includes("@")) {
+			throw new Parse.Error(Parse.Error.OBJECT_NOT_FOUND, "Invalid username or password.");
+		}
+
+		const userQuery = new Parse.Query(Parse.User);
+		userQuery.equalTo("email", loginName);
+
+		const userByEmail = await userQuery.first({ useMasterKey: true });
+		if (!userByEmail || !userByEmail.get("username")) {
+			throw new Parse.Error(Parse.Error.OBJECT_NOT_FOUND, "Invalid username or password.");
+		}
+
+		try {
+			user = await Parse.User.logIn(userByEmail.get("username"), password);
+		} catch (emailLoginError) {
+			console.log("Login failed after resolving email to username.", {
+				code: emailLoginError.code,
+				email: loginName,
+				resolvedUsername: userByEmail.get("username")
+			});
+
+			throw new Parse.Error(Parse.Error.OBJECT_NOT_FOUND, "Invalid username or password.");
+		}
+	}
+
+	let profileUser = user;
+
+	try {
+		const profileQuery = new Parse.Query(Parse.User);
+		profileQuery.include(["institution", "specialty"]);
+		profileUser = await profileQuery.get(user.id, { useMasterKey: true });
+	} catch (error) {
+		console.log("Login succeeded, but profile pointers could not be loaded.", {
+			code: error.code,
+			userId: user.id
+		});
+	}
+
+	const institution = profileUser.get("institution");
+	const specialty = profileUser.get("specialty");
 
 	return {
 		objectId: user.id,
-		username: user.get("username"),
-		email: user.get("email") || null,
+		username: profileUser.get("username"),
+		email: profileUser.get("email") || null,
 		sessionToken: user.getSessionToken(),
 		institution: institution
 			? {
