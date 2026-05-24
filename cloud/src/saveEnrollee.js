@@ -61,6 +61,7 @@ Parse.Cloud.define("saveEnrollee", async (request) => {
 	const Enrollee = Parse.Object.extend("Enrollee");
 	let enrollee = new Enrollee();
 	if (typeof payload.enrolleeId === "string" && payload.enrolleeId.trim()) {
+		// Edit mode updates the existing Enrollee rather than creating a duplicate.
 		const enrolleeQuery = new Parse.Query("Enrollee");
 		enrollee = await enrolleeQuery.get(payload.enrolleeId.trim(), { useMasterKey: true });
 	}
@@ -84,6 +85,7 @@ Parse.Cloud.define("saveEnrollee", async (request) => {
 
 	let survey = enrollee.get("survey") || null;
 	if (typeof payload.surveyId === "string" && payload.surveyId.trim()) {
+		// Continue Enrollment links a previously submitted survey to the new/updated enrollee.
 		const surveyQuery = new Parse.Query("Survey");
 		survey = await surveyQuery.get(payload.surveyId.trim(), { useMasterKey: true });
 		enrollee.set("survey", survey);
@@ -110,6 +112,7 @@ Parse.Cloud.define("saveEnrollee", async (request) => {
 	const savedEnrollee = await enrollee.save(null, { useMasterKey: true });
 
 	if (survey) {
+		// Keep the relationship bidirectional for list/detail queries.
 		survey.set("enrollee", savedEnrollee);
 		await survey.save(null, { useMasterKey: true });
 	}

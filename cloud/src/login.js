@@ -24,6 +24,7 @@ Parse.Cloud.define("login", async (request) => {
 			throw new Parse.Error(Parse.Error.OBJECT_NOT_FOUND, "Invalid username or password.");
 		}
 
+		// Allow staff to enter email even when Parse username is a separate value.
 		const userQuery = new Parse.Query(Parse.User);
 		userQuery.equalTo("email", loginName);
 
@@ -60,11 +61,18 @@ Parse.Cloud.define("login", async (request) => {
 
 	const institution = profileUser.get("institution");
 	const specialty = profileUser.get("specialty");
+	const isActive = profileUser.get("isActive") === true;
+
+	if (!isActive) {
+		// Keep inactive-user failures generic so the login form does not reveal account state.
+		throw new Parse.Error(Parse.Error.OBJECT_NOT_FOUND, "Login failed.");
+	}
 
 	return {
 		objectId: user.id,
 		username: profileUser.get("username"),
 		email: profileUser.get("email") || null,
+		role: profileUser.get("role") || null,
 		sessionToken: user.getSessionToken(),
 		institution: institution
 			? {

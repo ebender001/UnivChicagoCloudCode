@@ -56,6 +56,7 @@ function setActivityFields(survey, payload, config) {
 
 	if (!completed) return;
 
+	// Follow-up activity details are stored only when the patient answered Yes.
 	setIfPresent(survey, config.targetTimes, toNumber(payload[config.sourceTimes]));
 	setIfPresent(survey, config.targetMinutes, toNumber(payload[config.sourceMinutes]));
 	setIfPresent(survey, config.targetMonths, toNumber(payload[config.sourceMonths]));
@@ -157,9 +158,10 @@ Parse.Cloud.define("saveSurveyResults", async (request) => {
 		targetMonths: "golfMonths"
 	});
 
+	let enrollee = null;
 	const enrolleeId = payload.enrolleeId || payload.enrolleeObjectId || payload.enrollee;
 	if (typeof enrolleeId === "string" && enrolleeId.trim()) {
-		const enrollee = Parse.Object.extend("Enrollee").createWithoutData(enrolleeId.trim());
+		enrollee = Parse.Object.extend("Enrollee").createWithoutData(enrolleeId.trim());
 		survey.set("enrollee", enrollee);
 	}
 
@@ -169,6 +171,13 @@ Parse.Cloud.define("saveSurveyResults", async (request) => {
 	survey.setACL(acl);
 
 	const savedSurvey = await survey.save(null, { useMasterKey: true });
+
+	if (enrollee) {
+		// Keep Survey.enrollee and Enrollee.survey in sync for either start-from-survey flow.
+		enrollee.set("survey", savedSurvey);
+		enrollee.set("enrollmentComplete", true);
+		await enrollee.save(null, { useMasterKey: true });
+	}
 
 	return {
 		objectId: savedSurvey.id,
