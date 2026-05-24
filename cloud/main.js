@@ -5,3 +5,4 @@ require("./src/saveSurveyResults.js");
 require("./src/listEnrollees.js");
 require("./src/saveEnrollee.js");
 require("./src/listUnenrolledSurveys.js");
+require("./src/getEnrolleeDetails.js");

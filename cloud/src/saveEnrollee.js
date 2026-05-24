@@ -28,6 +28,15 @@ function cleanArray(values) {
 		.filter(isPresent);
 }
 
+function cleanNumberArray(values) {
+	if (!Array.isArray(values)) return [];
+
+	return values
+		.map((value) => Number(value))
+		.filter((value) => Number.isFinite(value))
+		.map((value) => Number(value.toPrecision(2)));
+}
+
 function setIfPresent(object, field, value) {
 	if (value !== null && value !== undefined) {
 		object.set(field, value);
@@ -50,7 +59,11 @@ Parse.Cloud.define("saveEnrollee", async (request) => {
 	}
 
 	const Enrollee = Parse.Object.extend("Enrollee");
-	const enrollee = new Enrollee();
+	let enrollee = new Enrollee();
+	if (typeof payload.enrolleeId === "string" && payload.enrolleeId.trim()) {
+		const enrolleeQuery = new Parse.Query("Enrollee");
+		enrollee = await enrolleeQuery.get(payload.enrolleeId.trim(), { useMasterKey: true });
+	}
 
 	setIfPresent(enrollee, "enrolleeNumber", enrolleeNumber);
 	setIfPresent(enrollee, "startDate", toDate(payload.startDate));
@@ -66,11 +79,14 @@ Parse.Cloud.define("saveEnrollee", async (request) => {
 	}
 
 	if (gaitCompleted) {
-		enrollee.set("gait", cleanArray(payload.gait));
+		enrollee.set("gait", cleanNumberArray(payload.gait));
 	}
 
+	let survey = enrollee.get("survey") || null;
 	if (typeof payload.surveyId === "string" && payload.surveyId.trim()) {
-		enrollee.set("survey", Parse.Object.extend("Survey").createWithoutData(payload.surveyId.trim()));
+		const surveyQuery = new Parse.Query("Survey");
+		survey = await surveyQuery.get(payload.surveyId.trim(), { useMasterKey: true });
+		enrollee.set("survey", survey);
 	}
 
 	const userQuery = new Parse.Query(Parse.User);
@@ -81,8 +97,10 @@ Parse.Cloud.define("saveEnrollee", async (request) => {
 	if (institution) enrollee.set("institution", institution);
 	if (specialty) enrollee.set("specialty", specialty);
 
-	setIfPresent(enrollee, "enrollmentComplete", true);
-	setIfPresent(enrollee, "enrolledInStudy", true);
+	setIfPresent(enrollee, "enrollmentComplete", Boolean(survey));
+	if (!isPresent(enrollee.get("enrolledInStudy"))) {
+		setIfPresent(enrollee, "enrolledInStudy", false);
+	}
 
 	const acl = new Parse.ACL(request.user);
 	acl.setPublicReadAccess(false);
@@ -90,6 +108,11 @@ Parse.Cloud.define("saveEnrollee", async (request) => {
 	enrollee.setACL(acl);
 
 	const savedEnrollee = await enrollee.save(null, { useMasterKey: true });
+
+	if (survey) {
+		survey.set("enrollee", savedEnrollee);
+		await survey.save(null, { useMasterKey: true });
+	}
 
 	return {
 		objectId: savedEnrollee.id,
