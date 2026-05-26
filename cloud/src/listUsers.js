@@ -7,7 +7,8 @@ function serializeUser(user) {
 		objectId: user.id,
 		name: user.get("name") || user.get("username") || user.get("email") || "",
 		institutionName: pointerName(user.get("institution")),
-		specialtyName: pointerName(user.get("specialty"))
+		specialtyName: pointerName(user.get("specialty")),
+		isActive: user.get("isActive") === true
 	};
 }
 
@@ -28,7 +29,6 @@ Parse.Cloud.define("listUsers", async (request) => {
 	await requireSuperAdmin(request.user);
 
 	const query = new Parse.Query(Parse.User);
-	query.equalTo("isActive", true);
 	query.include(["institution", "specialty"]);
 	query.ascending("name");
 	query.limit(1000);

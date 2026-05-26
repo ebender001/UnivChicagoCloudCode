@@ -10,6 +10,8 @@ require("./src/getEnrolleeDetails.js");
 require("./src/listInviteOptions.js");
 require("./src/createDashboardUserInvite.js");
 require("./src/activateDashboardUserInvite.js");
+require("./src/generateDashboardUserPIN.js");
+require("./src/requestDashboardPasswordReset.js");
 require("./src/createInstitution.js");
 require("./src/listInstitutions.js");
 require("./src/deactivateInstitution.js");

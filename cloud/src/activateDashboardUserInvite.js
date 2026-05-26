@@ -2,6 +2,8 @@ function normalizeString(value) {
 	return typeof value === "string" ? value.trim() : "";
 }
 
+const { setGeneratedPin } = require("./pinUtils.js");
+
 async function ensureUniqueUsername(username, userId) {
 	const query = new Parse.Query(Parse.User);
 	query.equalTo("username", username);
@@ -53,6 +55,7 @@ Parse.Cloud.define("activateDashboardUserInvite", async (request) => {
 	user.set("username", username);
 	user.set("password", password);
 	user.set("isActive", true);
+	const pin = setGeneratedPin(user);
 	user.unset("inviteToken");
 	user.unset("inviteExpiresAt");
 
@@ -62,6 +65,7 @@ Parse.Cloud.define("activateDashboardUserInvite", async (request) => {
 		objectId: savedUser.id,
 		username: savedUser.get("username"),
 		email: savedUser.get("email"),
-		isActive: savedUser.get("isActive") === true
+		isActive: savedUser.get("isActive") === true,
+		pin
 	};
 });
