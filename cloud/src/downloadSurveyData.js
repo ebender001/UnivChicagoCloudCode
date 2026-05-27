@@ -99,6 +99,21 @@ function serializeSurveyRow(survey) {
 	}).join(",");
 }
 
+function surveyJsonRow(survey) {
+	const enrollee = survey.get("enrollee") || null;
+	const row = {};
+
+	csvColumns.forEach((column) => {
+		const value = column.value
+			? column.value({ survey, enrollee })
+			: survey.get(column.field);
+
+		row[column.header] = formatValue(value);
+	});
+
+	return row;
+}
+
 async function getCurrentUser(user) {
 	const query = new Parse.Query(Parse.User);
 	query.include("institution");
@@ -131,7 +146,17 @@ Parse.Cloud.define("downloadSurveyData", async (request) => {
 		throw new Parse.Error(Parse.Error.SESSION_MISSING, "Login is required to download survey data.");
 	}
 
+	const format = request.params && request.params.format === "json" ? "json" : "csv";
 	const surveys = await findSurveysForExport(request.user);
+	if (format === "json") {
+		return {
+			filename: "survey-data.json",
+			contentType: "application/json",
+			count: surveys.length,
+			content: JSON.stringify(surveys.map(surveyJsonRow), null, 2)
+		};
+	}
+
 	const header = csvColumns.map((column) => csvEscape(column.header)).join(",");
 	const rows = surveys.map(serializeSurveyRow);
 	const csv = [header].concat(rows).join("\n");
@@ -140,6 +165,7 @@ Parse.Cloud.define("downloadSurveyData", async (request) => {
 		filename: "survey-data.csv",
 		contentType: "text/csv",
 		count: surveys.length,
+		content: csv,
 		csv
 	};
 });
