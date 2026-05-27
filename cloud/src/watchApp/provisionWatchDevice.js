@@ -1,16 +1,5 @@
-const crypto = require("crypto");
 const { verifyPin } = require("../pinUtils.js");
-
-function normalizeString(value) {
-	return typeof value === "string" ? value.trim() : "";
-}
-
-function hashDeviceToken(deviceToken) {
-	return crypto
-		.createHash("sha256")
-		.update(deviceToken)
-		.digest("hex");
-}
+const { hashDeviceToken, normalizeString } = require("./watchDeviceUtils.js");
 
 async function findUserByPin(pin) {
 	const query = new Parse.Query(Parse.User);

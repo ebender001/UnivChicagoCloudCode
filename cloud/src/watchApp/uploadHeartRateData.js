@@ -1,3 +1,5 @@
+const { findActiveWatchDevice } = require("./watchDeviceUtils.js");
+
 function parseRequiredDate(value, fieldName) {
 	const date = value instanceof Date ? value : new Date(value);
 
@@ -25,13 +27,8 @@ function getHeartRateRecords(params) {
 	return [params || {}];
 }
 
-async function saveHeartRateRecord(source) {
-	const patientId = typeof source.patientId === "string" ? source.patientId.trim() : "";
-
-	if (!patientId) {
-		throw new Parse.Error(Parse.Error.VALIDATION_ERROR, "patientId is required.");
-	}
-
+async function saveHeartRateRecord(source, fallback) {
+	const watchDevice = await findActiveWatchDevice(source, fallback);
 	const startDate = parseRequiredDate(source.startDate, "startDate");
 	const endDate = parseRequiredDate(source.endDate, "endDate");
 
@@ -44,9 +41,9 @@ async function saveHeartRateRecord(source) {
 	// The client app sends watch heart-rate summary data; CloudCode owns the HeartRate row creation.
 	const HeartRate = Parse.Object.extend("HeartRate");
 
-	// Duplicate uploads are skipped by matching the patient, time window, and metric value.
+	// Duplicate uploads are skipped by matching the watch device, time window, and metric value.
 	const duplicateQuery = new Parse.Query(HeartRate);
-	duplicateQuery.equalTo("patientId", patientId);
+	duplicateQuery.equalTo("watchDevice", watchDevice);
 	duplicateQuery.equalTo("startDate", startDate);
 	duplicateQuery.equalTo("endDate", endDate);
 	duplicateQuery.equalTo("hrVariability", hrVariability);
@@ -57,7 +54,7 @@ async function saveHeartRateRecord(source) {
 		// Return the existing row so the client knows this upload was already stored.
 		return {
 			objectId: duplicate.id,
-			patientId: duplicate.get("patientId"),
+			watchDevice: watchDevice.id,
 			startDate: duplicate.get("startDate"),
 			endDate: duplicate.get("endDate"),
 			hrVariability: duplicate.get("hrVariability"),
@@ -67,7 +64,7 @@ async function saveHeartRateRecord(source) {
 
 	const heartRate = new HeartRate();
 
-	heartRate.set("patientId", patientId);
+	heartRate.set("watchDevice", watchDevice);
 	heartRate.set("startDate", startDate);
 	heartRate.set("endDate", endDate);
 	heartRate.set("hrVariability", hrVariability);
@@ -76,7 +73,7 @@ async function saveHeartRateRecord(source) {
 
 	return {
 		objectId: heartRate.id,
-		patientId: heartRate.get("patientId"),
+		watchDevice: watchDevice.id,
 		startDate: heartRate.get("startDate"),
 		endDate: heartRate.get("endDate"),
 		hrVariability: heartRate.get("hrVariability"),
@@ -89,7 +86,7 @@ Parse.Cloud.define("watchAppUploadHeartRateData", async (request) => {
 	const results = [];
 
 	for (const record of records) {
-		results.push(await saveHeartRateRecord(record || {}));
+		results.push(await saveHeartRateRecord(record || {}, request.params));
 	}
 
 	return {

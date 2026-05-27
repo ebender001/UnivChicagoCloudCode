@@ -1,3 +1,5 @@
+const { findActiveWatchDevice } = require("./watchDeviceUtils.js");
+
 function parseRequiredDate(value, fieldName) {
 	const date = value instanceof Date ? value : new Date(value);
 
@@ -29,13 +31,8 @@ function getExerciseRecords(params) {
 	return [params || {}];
 }
 
-async function saveExerciseRecord(source) {
-	const patientId = typeof source.patientId === "string" ? source.patientId.trim() : "";
-
-	if (!patientId) {
-		throw new Parse.Error(Parse.Error.VALIDATION_ERROR, "patientId is required.");
-	}
-
+async function saveExerciseRecord(source, fallback) {
+	const watchDevice = await findActiveWatchDevice(source, fallback);
 	const startDate = parseRequiredDate(source.startDate, "startDate");
 	const endDate = parseRequiredDate(source.endDate, "endDate");
 
@@ -48,9 +45,9 @@ async function saveExerciseRecord(source) {
 	// The client app sends watch activity; CloudCode owns the Exercise row creation.
 	const Exercise = Parse.Object.extend("Exercise");
 
-	// Duplicate uploads are skipped by matching the patient, time window, and metric value.
+	// Duplicate uploads are skipped by matching the watch device, time window, and metric value.
 	const duplicateQuery = new Parse.Query(Exercise);
-	duplicateQuery.equalTo("patientId", patientId);
+	duplicateQuery.equalTo("watchDevice", watchDevice);
 	duplicateQuery.equalTo("startDate", startDate);
 	duplicateQuery.equalTo("endDate", endDate);
 	duplicateQuery.equalTo("exerciseMinutes", exerciseMinutes);
@@ -61,7 +58,7 @@ async function saveExerciseRecord(source) {
 		// Return the existing row so the client knows this upload was already stored.
 		return {
 			objectId: duplicate.id,
-			patientId: duplicate.get("patientId"),
+			watchDevice: watchDevice.id,
 			startDate: duplicate.get("startDate"),
 			endDate: duplicate.get("endDate"),
 			exerciseMinutes: duplicate.get("exerciseMinutes"),
@@ -71,7 +68,7 @@ async function saveExerciseRecord(source) {
 
 	const exercise = new Exercise();
 
-	exercise.set("patientId", patientId);
+	exercise.set("watchDevice", watchDevice);
 	exercise.set("startDate", startDate);
 	exercise.set("endDate", endDate);
 	exercise.set("exerciseMinutes", exerciseMinutes);
@@ -80,7 +77,7 @@ async function saveExerciseRecord(source) {
 
 	return {
 		objectId: exercise.id,
-		patientId: exercise.get("patientId"),
+		watchDevice: watchDevice.id,
 		startDate: exercise.get("startDate"),
 		endDate: exercise.get("endDate"),
 		exerciseMinutes: exercise.get("exerciseMinutes"),
@@ -93,7 +90,7 @@ Parse.Cloud.define("watchAppUploadExerciseData", async (request) => {
 	const results = [];
 
 	for (const record of records) {
-		results.push(await saveExerciseRecord(record || {}));
+		results.push(await saveExerciseRecord(record || {}, request.params));
 	}
 
 	return {

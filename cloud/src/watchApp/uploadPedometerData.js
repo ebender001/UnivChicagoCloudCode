@@ -1,3 +1,5 @@
+const { findActiveWatchDevice } = require("./watchDeviceUtils.js");
+
 function parseRequiredDate(value, fieldName) {
 	const date = value instanceof Date ? value : new Date(value);
 
@@ -39,13 +41,8 @@ function getPedometerRecords(params) {
 	return [params || {}];
 }
 
-async function savePedometerRecord(source) {
-	const patientId = typeof source.patientId === "string" ? source.patientId.trim() : "";
-
-	if (!patientId) {
-		throw new Parse.Error(Parse.Error.VALIDATION_ERROR, "patientId is required.");
-	}
-
+async function savePedometerRecord(source, fallback) {
+	const watchDevice = await findActiveWatchDevice(source, fallback);
 	const startDate = parseRequiredDate(source.startDate, "startDate");
 	const endDate = parseRequiredDate(source.endDate, "endDate");
 
@@ -63,9 +60,9 @@ async function savePedometerRecord(source) {
 	// The client app sends watch pedometer metrics; CloudCode owns the Pedometer row creation.
 	const Pedometer = Parse.Object.extend("Pedometer");
 
-	// Duplicate uploads are skipped by matching the patient, time window, and all metric values.
+	// Duplicate uploads are skipped by matching the watch device, time window, and all metric values.
 	const duplicateQuery = new Parse.Query(Pedometer);
-	duplicateQuery.equalTo("patientId", patientId);
+	duplicateQuery.equalTo("watchDevice", watchDevice);
 	duplicateQuery.equalTo("startDate", startDate);
 	duplicateQuery.equalTo("endDate", endDate);
 	duplicateQuery.equalTo("distance", distance);
@@ -81,7 +78,7 @@ async function savePedometerRecord(source) {
 		// Return the existing row so the client knows this upload was already stored.
 		return {
 			objectId: duplicate.id,
-			patientId: duplicate.get("patientId"),
+			watchDevice: watchDevice.id,
 			startDate: duplicate.get("startDate"),
 			endDate: duplicate.get("endDate"),
 			distance: duplicate.get("distance"),
@@ -96,7 +93,7 @@ async function savePedometerRecord(source) {
 
 	const pedometer = new Pedometer();
 
-	pedometer.set("patientId", patientId);
+	pedometer.set("watchDevice", watchDevice);
 	pedometer.set("startDate", startDate);
 	pedometer.set("endDate", endDate);
 	pedometer.set("distance", distance);
@@ -110,7 +107,7 @@ async function savePedometerRecord(source) {
 
 	return {
 		objectId: pedometer.id,
-		patientId: pedometer.get("patientId"),
+		watchDevice: watchDevice.id,
 		startDate: pedometer.get("startDate"),
 		endDate: pedometer.get("endDate"),
 		distance: pedometer.get("distance"),
@@ -128,7 +125,7 @@ Parse.Cloud.define("watchAppUploadPedometerData", async (request) => {
 	const results = [];
 
 	for (const record of records) {
-		results.push(await savePedometerRecord(record || {}));
+		results.push(await savePedometerRecord(record || {}, request.params));
 	}
 
 	return {
