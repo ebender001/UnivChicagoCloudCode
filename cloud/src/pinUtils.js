@@ -15,6 +15,25 @@ function hashPin(pin) {
 	return `${salt}:${hash}`;
 }
 
+function verifyPin(pin, hashedPin) {
+	if (!pin || typeof pin !== "string" || !hashedPin || typeof hashedPin !== "string") {
+		return false;
+	}
+
+	const parts = hashedPin.split(":");
+	if (parts.length !== 2 || !parts[0] || !parts[1]) {
+		return false;
+	}
+
+	const [salt, storedHash] = parts;
+	const submittedHash = crypto
+		.createHash("sha256")
+		.update(`${salt}:${pin}`)
+		.digest("hex");
+
+	return submittedHash === storedHash;
+}
+
 function setGeneratedPin(user) {
 	const pin = generatePin();
 	user.set("hashedPIN", hashPin(pin));
@@ -24,5 +43,6 @@ function setGeneratedPin(user) {
 module.exports = {
 	generatePin,
 	hashPin,
+	verifyPin,
 	setGeneratedPin
 };

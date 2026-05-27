@@ -23,3 +23,4 @@ require("./src/deactivateSpecialty.js");
 require("./src/watchApp/uploadExerciseData.js");
 require("./src/watchApp/uploadHeartRateData.js");
 require("./src/watchApp/uploadPedometerData.js");
+require("./src/watchApp/provisionWatchDevice.js");
