@@ -1,3 +1,5 @@
+const { exportScopeForRole } = require("./roleAccess.js");
+
 const combinedColumns = [
 	{ header: "Watch Number", key: "watchNumber" },
 	{ header: "Heart Rate Start Date", key: "heartRateStartDate" },
@@ -114,12 +116,13 @@ async function getCurrentUser(user) {
 	return query.get(user.id, { useMasterKey: true });
 }
 
-function scopedWatchDeviceQuery(currentUser) {
+async function scopedWatchDeviceQuery(currentUser) {
+	const exportScope = await exportScopeForRole(currentUser.get("role"));
 	const query = new Parse.Query("WatchDevice");
 	query.ascending("watchNumber");
 	query.limit(1000);
 
-	if (currentUser.get("role") !== "super_admin") {
+	if (exportScope === "institution") {
 		const institution = currentUser.get("institution");
 		if (!institution) {
 			throw new Parse.Error(Parse.Error.OPERATION_FORBIDDEN, "Your user account is not assigned to an institution.");
@@ -150,7 +153,7 @@ async function fetchAll(query) {
 
 async function fetchActivityObjects(user) {
 	const currentUser = await getCurrentUser(user);
-	const watchDeviceQuery = scopedWatchDeviceQuery(currentUser);
+	const watchDeviceQuery = await scopedWatchDeviceQuery(currentUser);
 
 	function buildQuery(className) {
 		const query = new Parse.Query(className);

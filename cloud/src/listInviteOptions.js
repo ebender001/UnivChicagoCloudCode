@@ -1,3 +1,5 @@
+const { getInviteRolesForUser } = require("./roleAccess.js");
+
 function serializeOption(object) {
 	return {
 		objectId: object.id,
@@ -30,9 +32,13 @@ Parse.Cloud.define("listInviteOptions", async (request) => {
 		listNamedOptions("Institution"),
 		listNamedOptions("Specialty")
 	]);
+	const roleQuery = new Parse.Query(Parse.User);
+	const currentUser = await roleQuery.get(request.user.id, { useMasterKey: true });
+	const roles = await getInviteRolesForUser(currentUser.get("role"));
 
 	return {
 		institutions,
-		specialties
+		specialties,
+		roles
 	};
 });

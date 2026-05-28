@@ -1,10 +1,4 @@
-const roles = [
-	"super_admin",
-	"study_admin",
-	"study_coordinator",
-	"data_entry",
-	"viewer"
-];
+const { canInviteRole, getRoleByName } = require("./roleAccess.js");
 const https = require("https");
 
 function randomPassword() {
@@ -19,18 +13,6 @@ function randomToken() {
 
 function normalizeEmail(value) {
 	return typeof value === "string" ? value.trim().toLowerCase() : "";
-}
-
-function canInviteRole(currentRole, invitedRole) {
-	const currentIndex = roles.indexOf(currentRole);
-	const invitedIndex = roles.indexOf(invitedRole);
-	const inviteAccessLimit = roles.indexOf("study_coordinator");
-
-	// Lower array index means broader access; users may invite only their own role or lower.
-	return currentIndex >= 0
-		&& invitedIndex >= 0
-		&& currentIndex <= inviteAccessLimit
-		&& invitedIndex >= currentIndex;
 }
 
 async function getFullUser(user) {
@@ -48,58 +30,50 @@ async function ensureUniqueUser(email) {
 	}
 }
 
-function roleLabel(role) {
-	return {
-		super_admin: "Super Admin",
-		study_admin: "Study Admin",
-		study_coordinator: "Study Coordinator",
-		data_entry: "Data Entry",
-		viewer: "Viewer"
-	}[role] || role;
+function roleLabel(role, roleRecord) {
+	return roleRecord && roleRecord.get("displayName")
+		? roleRecord.get("displayName")
+		: role;
 }
 
-function roleBodyText(role) {
-	return {
-		super_admin: "You have been invited as a Super Admin with full system access across all institutions.",
-		study_admin: "You have been invited as a Study Admin with full access within your institution or study.",
-		study_coordinator: "You have been invited as a Study Coordinator with operational access for patients, surveys, watch registration, and uploads.",
-		data_entry: "You have been invited for Data Entry access to enter and edit patient and survey data.",
-		viewer: "You have been invited as a Viewer with read-only access within your institution or study."
-	}[role] || "You have been invited to use the BeFitMe dashboard.";
+function roleBodyText(roleRecord) {
+	return roleRecord && roleRecord.get("description")
+		? roleRecord.get("description")
+		: "You have been invited to use the BeFitMe dashboard.";
 }
 
-function inviteEmailHtml({ name, role, activationUrl }) {
+function inviteEmailHtml({ name, role, roleRecord, activationUrl }) {
 	const greeting = name ? `Hello ${name},` : "Hello,";
 
 	return [
 		`<p>${greeting}</p>`,
-		`<p>${roleBodyText(role)}</p>`,
+		`<p>${roleBodyText(roleRecord)}</p>`,
 		`<p>Use the link below to choose your username and password.</p>`,
 		`<p><a href="${activationUrl}">Accept BeFitMe invitation</a></p>`,
-		`<p>This invitation creates a ${roleLabel(role)} dashboard account.</p>`,
+		`<p>This invitation creates a ${roleLabel(role, roleRecord)} dashboard account.</p>`,
 		`<p>Thank you.</p>`
 	].join("");
 }
 
-function inviteEmailText({ name, role, activationUrl }) {
+function inviteEmailText({ name, role, roleRecord, activationUrl }) {
 	const greeting = name ? `Hello ${name},` : "Hello,";
 
 	return [
 		greeting,
 		"",
-		roleBodyText(role),
+		roleBodyText(roleRecord),
 		"",
 		"Use the link below to choose your username and password.",
 		"",
 		activationUrl,
 		"",
-		`This invitation creates a ${roleLabel(role)} dashboard account.`,
+		`This invitation creates a ${roleLabel(role, roleRecord)} dashboard account.`,
 		"",
 		"Thank you."
 	].join("\n");
 }
 
-async function sendInviteEmail({ email, name, role, activationUrl }) {
+async function sendInviteEmail({ email, name, role, roleRecord, activationUrl }) {
 	const apiKey = process.env.RESEND_API_KEY;
 	if (!apiKey) {
 		throw new Parse.Error(Parse.Error.SCRIPT_FAILED, "RESEND_API_KEY is not configured.");
@@ -110,8 +84,8 @@ async function sendInviteEmail({ email, name, role, activationUrl }) {
 		from,
 		to: [email],
 		subject: "BeFitMe User Invitation",
-		html: inviteEmailHtml({ name, role, activationUrl }),
-		text: inviteEmailText({ name, role, activationUrl })
+		html: inviteEmailHtml({ name, role, roleRecord, activationUrl }),
+		text: inviteEmailText({ name, role, roleRecord, activationUrl })
 	});
 
 	// Back4App's Parse runtime does not expose Parse.Cloud.httpRequest here, so use https directly.
@@ -185,7 +159,8 @@ Parse.Cloud.define("createDashboardUserInvite", async (request) => {
 
 	const inviter = await getFullUser(request.user);
 	const inviterRole = inviter.get("role");
-	if (!canInviteRole(inviterRole, role)) {
+	const invitedRole = await getRoleByName(role);
+	if (!invitedRole || !(await canInviteRole(inviterRole, role))) {
 		throw new Parse.Error(Parse.Error.OPERATION_FORBIDDEN, "You cannot invite a user with that role.");
 	}
 
@@ -213,7 +188,9 @@ Parse.Cloud.define("createDashboardUserInvite", async (request) => {
 	if (name) invitedUser.set("name", name);
 
 	const savedUser = await invitedUser.signUp(null, { useMasterKey: true });
-	await sendInviteEmail({ email, name, role, activationUrl });
+	invitedRole.getUsers().add(savedUser);
+	await invitedRole.save(null, { useMasterKey: true });
+	await sendInviteEmail({ email, name, role, roleRecord: invitedRole, activationUrl });
 
 	return {
 		objectId: savedUser.id,

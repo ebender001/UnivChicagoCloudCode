@@ -1,3 +1,5 @@
+const { exportScopeForRole } = require("./roleAccess.js");
+
 const surveyDateFormatter = new Intl.DateTimeFormat("en-US", {
 	month: "long",
 	day: "numeric",
@@ -122,12 +124,13 @@ async function getCurrentUser(user) {
 
 async function findSurveysForExport(user) {
 	const currentUser = await getCurrentUser(user);
+	const exportScope = await exportScopeForRole(currentUser.get("role"));
 	const query = new Parse.Query("Survey");
 	query.include("enrollee");
 	query.ascending("createdAt");
 	query.limit(1000);
 
-	if (currentUser.get("role") !== "super_admin") {
+	if (exportScope === "institution") {
 		const institution = currentUser.get("institution");
 		if (!institution) {
 			throw new Parse.Error(Parse.Error.OPERATION_FORBIDDEN, "Your user account is not assigned to an institution.");
