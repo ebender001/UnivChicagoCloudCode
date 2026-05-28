@@ -9,6 +9,7 @@ require("./src/listSurveys.js");
 require("./src/getEnrolleeDetails.js");
 require("./src/downloadSurveyData.js");
 require("./src/downloadActivityData.js");
+require("./src/downloadFrailtyScores.js");
 require("./src/listInviteOptions.js");
 require("./src/createDashboardUserInvite.js");
 require("./src/activateDashboardUserInvite.js");
