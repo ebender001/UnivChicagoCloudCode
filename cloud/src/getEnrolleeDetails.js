@@ -37,13 +37,15 @@ async function userHasRole(user, roleName) {
 	return fullUser.get("role") === roleName;
 }
 
+async function getCurrentUser(user) {
+	const query = new Parse.Query(Parse.User);
+	query.include(["institution", "specialty"]);
+	return query.get(user.id, { useMasterKey: true });
+}
+
 Parse.Cloud.define("getEnrolleeDetails", async (request) => {
 	if (!request.user) {
 		throw new Parse.Error(Parse.Error.SESSION_MISSING, "Login is required to view enrollee details.");
-	}
-
-	if (!(await userHasRole(request.user, "super_admin"))) {
-		throw new Parse.Error(Parse.Error.OPERATION_FORBIDDEN, "Only super_admin users can view enrollee details.");
 	}
 
 	const enrolleeId = request.params && request.params.enrolleeId;
@@ -51,11 +53,29 @@ Parse.Cloud.define("getEnrolleeDetails", async (request) => {
 		throw new Parse.Error(Parse.Error.VALIDATION_ERROR, "Enrollee id is required.");
 	}
 
+	const currentUser = await getCurrentUser(request.user);
+	const isSuperAdmin = await userHasRole(request.user, "super_admin");
 	const query = new Parse.Query("Enrollee");
 	query.include("survey");
 
 	const enrollee = await query.get(enrolleeId, { useMasterKey: true });
 	const survey = enrollee.get("survey");
+
+	if (!isSuperAdmin) {
+		const institution = currentUser.get("institution");
+		const specialty = currentUser.get("specialty");
+
+		if (!institution || !specialty) {
+			throw new Parse.Error(Parse.Error.OPERATION_FORBIDDEN, "Your user account must have an institution and specialty to view enrollee details.");
+		}
+
+		const sameInstitution = enrollee.get("institution") && enrollee.get("institution").id === institution.id;
+		const sameSpecialty = enrollee.get("specialty") && enrollee.get("specialty").id === specialty.id;
+
+		if (!sameInstitution || !sameSpecialty) {
+			throw new Parse.Error(Parse.Error.OPERATION_FORBIDDEN, "You can only view enrollees in your institution and specialty.");
+		}
+	}
 
 	return {
 		enrollee: serializeObject(enrollee),

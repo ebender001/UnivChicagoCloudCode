@@ -32,19 +32,49 @@ async function userHasRole(user, roleName) {
 	return false;
 }
 
+async function getCurrentUser(user) {
+	const query = new Parse.Query(Parse.User);
+	query.include(["institution", "specialty"]);
+	return query.get(user.id, { useMasterKey: true });
+}
+
 Parse.Cloud.define("listSurveys", async (request) => {
 	if (!request.user) {
 		throw new Parse.Error(Parse.Error.SESSION_MISSING, "Login is required to list surveys.");
 	}
 
-	if (!(await userHasRole(request.user, "super_admin"))) {
-		throw new Parse.Error(Parse.Error.OPERATION_FORBIDDEN, "Only super_admin users can list surveys.");
-	}
-
 	const limit = Math.min(Math.max(Number(request.params.limit) || 100, 1), 1000);
 	const skip = Math.max(Number(request.params.skip) || 0, 0);
+	const currentUser = await getCurrentUser(request.user);
+	const isSuperAdmin = await userHasRole(request.user, "super_admin");
 
-	const query = new Parse.Query("Survey");
+	let query;
+
+	if (isSuperAdmin) {
+		query = new Parse.Query("Survey");
+	} else {
+		const institution = currentUser.get("institution");
+		const specialty = currentUser.get("specialty");
+
+		if (!institution || !specialty) {
+			throw new Parse.Error(Parse.Error.OPERATION_FORBIDDEN, "Your user account must have an institution and specialty to view surveys.");
+		}
+
+		const enrolleeQuery = new Parse.Query("Enrollee");
+		enrolleeQuery.equalTo("institution", institution);
+		enrolleeQuery.equalTo("specialty", specialty);
+
+		const scopedSurveyQuery = new Parse.Query("Survey");
+		scopedSurveyQuery.equalTo("institution", institution);
+		scopedSurveyQuery.equalTo("specialty", specialty);
+		scopedSurveyQuery.doesNotExist("enrollee");
+
+		const linkedSurveyQuery = new Parse.Query("Survey");
+		linkedSurveyQuery.matchesQuery("enrollee", enrolleeQuery);
+		query = Parse.Query.or(linkedSurveyQuery, scopedSurveyQuery);
+	}
+
+	query.include("enrollee");
 	query.descending("createdAt");
 	query.limit(limit);
 	query.skip(skip);

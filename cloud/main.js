@@ -23,6 +23,7 @@ require("./src/deactivateUser.js");
 require("./src/createSpecialty.js");
 require("./src/listSpecialties.js");
 require("./src/deactivateSpecialty.js");
+require("./src/seedManagedData.js");
 require("./src/watchApp/uploadExerciseData.js");
 require("./src/watchApp/uploadHeartRateData.js");
 require("./src/watchApp/uploadPedometerData.js");

@@ -22,23 +22,39 @@ async function userHasRole(user, roleName) {
 	return false;
 }
 
+async function getCurrentUser(user) {
+	const query = new Parse.Query(Parse.User);
+	query.include(["institution", "specialty"]);
+	return query.get(user.id, { useMasterKey: true });
+}
+
 Parse.Cloud.define("listUnenrolledSurveys", async (request) => {
 	if (!request.user) {
 		throw new Parse.Error(Parse.Error.SESSION_MISSING, "Login is required to list surveys.");
 	}
 
-	if (!(await userHasRole(request.user, "super_admin"))) {
-		throw new Parse.Error(Parse.Error.OPERATION_FORBIDDEN, "Only super_admin users can list surveys.");
-	}
-
 	const limit = Math.min(Math.max(Number(request.params.limit) || 100, 1), 1000);
 	const skip = Math.max(Number(request.params.skip) || 0, 0);
+	const currentUser = await getCurrentUser(request.user);
+	const isSuperAdmin = await userHasRole(request.user, "super_admin");
 
 	const query = new Parse.Query("Survey");
 	query.doesNotExist("enrollee");
 	query.descending("createdAt");
 	query.limit(limit);
 	query.skip(skip);
+
+	if (!isSuperAdmin) {
+		const institution = currentUser.get("institution");
+		const specialty = currentUser.get("specialty");
+
+		if (!institution || !specialty) {
+			throw new Parse.Error(Parse.Error.OPERATION_FORBIDDEN, "Your user account must have an institution and specialty to view surveys.");
+		}
+
+		query.equalTo("institution", institution);
+		query.equalTo("specialty", specialty);
+	}
 
 	const surveys = await query.find({ useMasterKey: true });
 	const total = await query.count({ useMasterKey: true });
