@@ -116,7 +116,42 @@ async function getCurrentUser(user) {
 	return query.get(user.id, { useMasterKey: true });
 }
 
-async function scopedWatchDeviceQuery(currentUser) {
+function normalizeWatchNumber(value) {
+	return typeof value === "string" ? value.trim() : "";
+}
+
+function parseDateFilter(value, isEndOfDay) {
+	if (!value) return null;
+	if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value.trim())) {
+		throw new Parse.Error(Parse.Error.VALIDATION_ERROR, "Date filters must use YYYY-MM-DD.");
+	}
+
+	const time = isEndOfDay ? "T23:59:59.999Z" : "T00:00:00.000Z";
+	const date = new Date(`${value.trim()}${time}`);
+	if (Number.isNaN(date.getTime())) {
+		throw new Parse.Error(Parse.Error.VALIDATION_ERROR, "Date filters must be valid calendar dates.");
+	}
+
+	return date;
+}
+
+function parseActivityFilters(params) {
+	const watchNumber = normalizeWatchNumber(params && params.watchNumber);
+	const endDateFrom = parseDateFilter(params && params.endDateFrom, false);
+	const endDateTo = parseDateFilter(params && params.endDateTo, true);
+
+	if (endDateFrom && endDateTo && endDateFrom > endDateTo) {
+		throw new Parse.Error(Parse.Error.VALIDATION_ERROR, "End date range start must be on or before the end date range finish.");
+	}
+
+	return {
+		watchNumber,
+		endDateFrom,
+		endDateTo
+	};
+}
+
+async function scopedWatchDeviceQuery(currentUser, filters) {
 	const exportScope = await exportScopeForRole(currentUser.get("role"));
 	const query = new Parse.Query("WatchDevice");
 	query.ascending("watchNumber");
@@ -129,6 +164,10 @@ async function scopedWatchDeviceQuery(currentUser) {
 		}
 
 		query.equalTo("institution", institution);
+	}
+
+	if (filters && filters.watchNumber) {
+		query.equalTo("watchNumber", filters.watchNumber);
 	}
 
 	return query;
@@ -151,15 +190,24 @@ async function fetchAll(query) {
 	return results;
 }
 
-async function fetchActivityObjects(user) {
+async function fetchActivityObjects(user, filters) {
 	const currentUser = await getCurrentUser(user);
-	const watchDeviceQuery = await scopedWatchDeviceQuery(currentUser);
+	const watchDeviceQuery = await scopedWatchDeviceQuery(currentUser, filters);
 
 	function buildQuery(className) {
 		const query = new Parse.Query(className);
 		query.include("watchDevice");
 		query.matchesQuery("watchDevice", watchDeviceQuery);
 		query.ascending("startDate");
+
+		if (filters && filters.endDateFrom) {
+			query.greaterThanOrEqualTo("endDate", filters.endDateFrom);
+		}
+
+		if (filters && filters.endDateTo) {
+			query.lessThanOrEqualTo("endDate", filters.endDateTo);
+		}
+
 		return query;
 	}
 
@@ -170,6 +218,16 @@ async function fetchActivityObjects(user) {
 	]);
 
 	return { heartRates, pedometers, exercises };
+}
+
+async function listScopedWatchNumbers(user) {
+	const currentUser = await getCurrentUser(user);
+	const watchDevices = await fetchAll(await scopedWatchDeviceQuery(currentUser, {}));
+	const watchNumbers = watchDevices
+		.map((watchDevice) => watchDevice.get("watchNumber"))
+		.filter((value) => typeof value === "string" && value.trim());
+
+	return Array.from(new Set(watchNumbers)).sort((left, right) => left.localeCompare(right, undefined, { numeric: true }));
 }
 
 function sortRows(rows) {
@@ -271,7 +329,19 @@ function buildFile(filenameBase, columns, rows, format) {
 	};
 }
 
-function buildExport(activityObjects, exportType, format) {
+function buildGroupedExport(filenameBase, activityObjects, format) {
+	return {
+		filename: `${filenameBase}.zip`,
+		contentType: "application/zip",
+		files: [
+			buildFile("heart-rate-data", heartRateColumns, heartRateRows(activityObjects.heartRates), format),
+			buildFile("pedometer-data", pedometerColumns, pedometerRows(activityObjects.pedometers), format),
+			buildFile("exercise-data", exerciseColumns, exerciseRows(activityObjects.exercises), format)
+		]
+	};
+}
+
+function buildExport(activityObjects, exportType, format, filters) {
 	if (exportType === "heartRate") {
 		return buildFile("heart-rate-data", heartRateColumns, heartRateRows(activityObjects.heartRates), format);
 	}
@@ -285,19 +355,32 @@ function buildExport(activityObjects, exportType, format) {
 	}
 
 	if (exportType === "separate") {
-		return {
-			filename: "activity-data-files.zip",
-			contentType: "application/zip",
-			files: [
-				buildFile("heart-rate-data", heartRateColumns, heartRateRows(activityObjects.heartRates), format),
-				buildFile("pedometer-data", pedometerColumns, pedometerRows(activityObjects.pedometers), format),
-				buildFile("exercise-data", exerciseColumns, exerciseRows(activityObjects.exercises), format)
-			]
-		};
+		return buildGroupedExport("activity-data-files", activityObjects, format);
+	}
+
+	if (exportType === "byWatchNumber") {
+		const watchSuffix = filters && filters.watchNumber ? `watch-${filters.watchNumber}` : "watch-number";
+		return buildGroupedExport(`activity-data-${watchSuffix}`, activityObjects, format);
+	}
+
+	if (exportType === "byDate") {
+		const start = filters && filters.endDateFrom ? filters.endDateFrom.toISOString().slice(0, 10) : "start";
+		const end = filters && filters.endDateTo ? filters.endDateTo.toISOString().slice(0, 10) : "end";
+		return buildGroupedExport(`activity-data-${start}-to-${end}`, activityObjects, format);
 	}
 
 	return buildFile("activity-data", combinedColumns, combinedRows(activityObjects), format);
 }
+
+Parse.Cloud.define("listActivityWatchNumbers", async (request) => {
+	if (!request.user) {
+		throw new Parse.Error(Parse.Error.SESSION_MISSING, "Login is required to view watch numbers.");
+	}
+
+	return {
+		watchNumbers: await listScopedWatchNumbers(request.user)
+	};
+});
 
 Parse.Cloud.define("downloadActivityData", async (request) => {
 	if (!request.user) {
@@ -305,12 +388,22 @@ Parse.Cloud.define("downloadActivityData", async (request) => {
 	}
 
 	const exportType = request.params && request.params.exportType ? request.params.exportType : "combined";
-	const validTypes = ["combined", "heartRate", "pedometer", "exercise", "separate"];
+	const validTypes = ["combined", "heartRate", "pedometer", "exercise", "separate", "byWatchNumber", "byDate"];
 	if (!validTypes.includes(exportType)) {
 		throw new Parse.Error(Parse.Error.VALIDATION_ERROR, "Invalid activity export type.");
 	}
 
 	const format = request.params && request.params.format === "json" ? "json" : "csv";
-	const activityObjects = await fetchActivityObjects(request.user);
-	return buildExport(activityObjects, exportType, format);
+	const filters = parseActivityFilters(request.params || {});
+
+	if (exportType === "byWatchNumber" && !filters.watchNumber) {
+		throw new Parse.Error(Parse.Error.VALIDATION_ERROR, "A watch number is required for activity export by watch number.");
+	}
+
+	if (exportType === "byDate" && (!filters.endDateFrom || !filters.endDateTo)) {
+		throw new Parse.Error(Parse.Error.VALIDATION_ERROR, "A start and end date are required for activity export by date.");
+	}
+
+	const activityObjects = await fetchActivityObjects(request.user, filters);
+	return buildExport(activityObjects, exportType, format, filters);
 });
