@@ -3,7 +3,8 @@ function serializePointer(pointer) {
 
 	return {
 		className: pointer.className,
-		objectId: pointer.id
+		objectId: pointer.id,
+		enrolleeNumber: pointer.get ? (pointer.get("enrolleeNumber") || pointer.get("number") || null) : null
 	};
 }
 
