@@ -1,19 +1,39 @@
-Parse.Cloud.define("requestDashboardPasswordReset", async (request) => {
-	if (!request.user) {
-		throw new Parse.Error(Parse.Error.INVALID_SESSION_TOKEN, "Login is required.");
-	}
+function normalizeLoginName(value) {
+	return typeof value === "string" ? value.trim() : "";
+}
 
+async function findUserByLoginName(loginName) {
 	const userQuery = new Parse.Query(Parse.User);
-	const user = await userQuery.get(request.user.id, { useMasterKey: true });
-	const email = user.get("email");
 
-	if (!email || typeof email !== "string") {
-		throw new Parse.Error(Parse.Error.VALIDATION_ERROR, "No email address is available for this user.");
+	if (loginName.includes("@")) {
+		userQuery.equalTo("email", loginName.toLowerCase());
+	} else {
+		userQuery.equalTo("username", loginName);
 	}
 
-	await Parse.User.requestPasswordReset(email);
+	return userQuery.first({ useMasterKey: true });
+}
 
+Parse.Cloud.define("requestDashboardPasswordReset", async (request) => {
+	const { username } = request.params || {};
+	const loginName = normalizeLoginName(username);
+
+	if (!loginName) {
+		throw new Parse.Error(Parse.Error.VALIDATION_ERROR, "Username or email is required.");
+	}
+
+	const user = await findUserByLoginName(loginName);
+	const email = user && typeof user.get("email") === "string"
+		? user.get("email").trim().toLowerCase()
+		: "";
+	const isActive = user && user.get("isActive") === true;
+
+	if (email && isActive) {
+		await Parse.User.requestPasswordReset(email);
+	}
+
+	// Keep responses generic so the endpoint does not reveal whether an account exists.
 	return {
-		email
+		success: true
 	};
 });
