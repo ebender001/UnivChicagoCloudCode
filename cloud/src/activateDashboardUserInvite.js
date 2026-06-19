@@ -55,6 +55,7 @@ Parse.Cloud.define("activateDashboardUserInvite", async (request) => {
 	user.set("username", username);
 	user.set("password", password);
 	user.set("isActive", true);
+	user.set("emailVerified", true);
 	const pin = setGeneratedPin(user);
 	user.unset("inviteToken");
 	user.unset("inviteExpiresAt");
