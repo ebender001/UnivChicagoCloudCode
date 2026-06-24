@@ -63,10 +63,6 @@ function setActivityFields(survey, payload, config) {
 }
 
 Parse.Cloud.define("saveSurveyResults", async (request) => {
-	if (!request.user) {
-		throw new Parse.Error(Parse.Error.SESSION_MISSING, "Login is required to save survey results.");
-	}
-
 	const payload = request.params && (request.params.survey || request.params);
 	if (!payload || typeof payload !== "object") {
 		throw new Parse.Error(Parse.Error.VALIDATION_ERROR, "Survey payload is required.");
@@ -160,12 +156,12 @@ Parse.Cloud.define("saveSurveyResults", async (request) => {
 
 	let enrollee = null;
 	const enrolleeId = payload.enrolleeId || payload.enrolleeObjectId || payload.enrollee;
-	if (typeof enrolleeId === "string" && enrolleeId.trim()) {
+	if (request.user && typeof enrolleeId === "string" && enrolleeId.trim()) {
 		enrollee = Parse.Object.extend("Enrollee").createWithoutData(enrolleeId.trim());
 		survey.set("enrollee", enrollee);
 	}
 
-	const acl = new Parse.ACL(request.user);
+	const acl = request.user ? new Parse.ACL(request.user) : new Parse.ACL();
 	acl.setPublicReadAccess(false);
 	acl.setPublicWriteAccess(false);
 	survey.setACL(acl);
