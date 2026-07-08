@@ -7,6 +7,7 @@ require("./src/saveEnrollee.js");
 require("./src/listUnenrolledSurveys.js");
 require("./src/listSurveys.js");
 require("./src/getEnrolleeDetails.js");
+require("./src/getEnrolleeSummaryScores.js");
 require("./src/downloadSurveyData.js");
 require("./src/downloadActivityData.js");
 require("./src/downloadFrailtyScores.js");
