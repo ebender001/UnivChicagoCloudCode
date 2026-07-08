@@ -60,10 +60,22 @@ Parse.Cloud.define("saveEnrollee", async (request) => {
 
 	const Enrollee = Parse.Object.extend("Enrollee");
 	let enrollee = new Enrollee();
+	let existingEnrolleeId = null;
 	if (typeof payload.enrolleeId === "string" && payload.enrolleeId.trim()) {
 		// Edit mode updates the existing Enrollee rather than creating a duplicate.
 		const enrolleeQuery = new Parse.Query("Enrollee");
-		enrollee = await enrolleeQuery.get(payload.enrolleeId.trim(), { useMasterKey: true });
+		existingEnrolleeId = payload.enrolleeId.trim();
+		enrollee = await enrolleeQuery.get(existingEnrolleeId, { useMasterKey: true });
+	}
+
+	const duplicateEnrolleeQuery = new Parse.Query("Enrollee");
+	duplicateEnrolleeQuery.equalTo("enrolleeNumber", enrolleeNumber);
+	const duplicateEnrollee = await duplicateEnrolleeQuery.first({ useMasterKey: true });
+	if (duplicateEnrollee && duplicateEnrollee.id !== existingEnrolleeId) {
+		throw new Parse.Error(
+			Parse.Error.VALIDATION_ERROR,
+			"That enrollee number already exists. Generate a new enrollee number if this is a new patient."
+		);
 	}
 
 	setIfPresent(enrollee, "enrolleeNumber", enrolleeNumber);
