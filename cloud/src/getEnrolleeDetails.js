@@ -37,6 +37,14 @@ async function userHasRole(user, roleName) {
 	return fullUser.get("role") === roleName;
 }
 
+async function userHasAdminRole(user) {
+	const userQuery = new Parse.Query(Parse.User);
+	const fullUser = await userQuery.get(user.id, { useMasterKey: true });
+	const role = fullUser.get("role");
+
+	return role === "super_admin" || role === "study_admin";
+}
+
 async function getCurrentUser(user) {
 	const query = new Parse.Query(Parse.User);
 	query.include(["institution", "specialty"]);
@@ -54,14 +62,14 @@ Parse.Cloud.define("getEnrolleeDetails", async (request) => {
 	}
 
 	const currentUser = await getCurrentUser(request.user);
-	const isSuperAdmin = await userHasRole(request.user, "super_admin");
+	const hasAllDataAccess = await userHasAdminRole(request.user);
 	const query = new Parse.Query("Enrollee");
 	query.include("survey");
 
 	const enrollee = await query.get(enrolleeId, { useMasterKey: true });
 	const survey = enrollee.get("survey");
 
-	if (!isSuperAdmin) {
+	if (!hasAllDataAccess) {
 		const institution = currentUser.get("institution");
 		const specialty = currentUser.get("specialty");
 
