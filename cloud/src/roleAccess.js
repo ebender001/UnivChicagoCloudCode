@@ -1,5 +1,7 @@
 const superAdminRoleName = "super_admin";
+const studyAdminRoleName = "study_admin";
 const inviteAccessLimitRoleName = "study_coordinator";
+const institutionDataAccessRoleName = "study_coordinator";
 
 function roleOrder(role) {
 	const value = Number(role && role.get("order"));
@@ -54,8 +56,22 @@ async function canInviteRole(currentRoleName, invitedRoleName) {
 	return allowedRoles.some((role) => role.name === invitedRoleName);
 }
 
+function hasAllDataAccess(roleName) {
+	return roleName === superAdminRoleName || roleName === studyAdminRoleName;
+}
+
+function hasInstitutionDataAccess(roleName) {
+	return hasAllDataAccess(roleName) || roleName === institutionDataAccessRoleName;
+}
+
+function dataAccessScopeForRole(roleName) {
+	if (hasAllDataAccess(roleName)) return "all";
+	if (roleName === institutionDataAccessRoleName) return "institution";
+	return "institution_specialty";
+}
+
 async function exportScopeForRole(roleName) {
-	if (roleName === superAdminRoleName) return "all";
+	if (hasAllDataAccess(roleName)) return "all";
 
 	const [role, institutionScopeLimitRole] = await Promise.all([
 		getRoleByName(roleName),
@@ -71,7 +87,10 @@ async function exportScopeForRole(roleName) {
 
 module.exports = {
 	canInviteRole,
+	dataAccessScopeForRole,
 	exportScopeForRole,
 	getRoleByName,
-	getInviteRolesForUser
+	getInviteRolesForUser,
+	hasAllDataAccess,
+	hasInstitutionDataAccess
 };

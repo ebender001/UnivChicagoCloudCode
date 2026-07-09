@@ -1,4 +1,4 @@
-const { canInviteRole, getRoleByName } = require("./roleAccess.js");
+const { canInviteRole, dataAccessScopeForRole, getRoleByName } = require("./roleAccess.js");
 const https = require("https");
 
 function randomPassword() {
@@ -159,9 +159,21 @@ Parse.Cloud.define("createDashboardUserInvite", async (request) => {
 
 	const inviter = await getFullUser(request.user);
 	const inviterRole = inviter.get("role");
+	const inviterAccessScope = dataAccessScopeForRole(inviterRole);
 	const invitedRole = await getRoleByName(role);
 	if (!invitedRole || !(await canInviteRole(inviterRole, role))) {
 		throw new Parse.Error(Parse.Error.OPERATION_FORBIDDEN, "You cannot invite a user with that role.");
+	}
+
+	if (inviterAccessScope === "institution") {
+		const inviterInstitution = inviter.get("institution");
+		if (!inviterInstitution) {
+			throw new Parse.Error(Parse.Error.OPERATION_FORBIDDEN, "Your user account must have an institution to invite dashboard users.");
+		}
+
+		if (institutionId !== inviterInstitution.id) {
+			throw new Parse.Error(Parse.Error.OPERATION_FORBIDDEN, "You can only invite dashboard users for your institution.");
+		}
 	}
 
 	await ensureUniqueUser(email);

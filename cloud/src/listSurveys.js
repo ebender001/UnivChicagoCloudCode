@@ -1,3 +1,5 @@
+const { dataAccessScopeForRole } = require("./roleAccess.js");
+
 function serializePointer(pointer) {
 	if (!pointer) return null;
 
@@ -17,30 +19,6 @@ function serializeSurvey(survey) {
 	};
 }
 
-async function userHasRole(user, roleName) {
-	const userQuery = new Parse.Query(Parse.User);
-	const fullUser = await userQuery.get(user.id, { useMasterKey: true });
-	const role = fullUser.get("role");
-
-	if (role === roleName) return true;
-
-	console.log("User role does not allow all survey list access.", {
-		userId: user.id,
-		requiredRole: roleName,
-		actualRole: role || null
-	});
-
-	return false;
-}
-
-async function userHasAdminRole(user) {
-	const userQuery = new Parse.Query(Parse.User);
-	const fullUser = await userQuery.get(user.id, { useMasterKey: true });
-	const role = fullUser.get("role");
-
-	return role === "super_admin" || role === "study_admin";
-}
-
 async function getCurrentUser(user) {
 	const query = new Parse.Query(Parse.User);
 	query.include(["institution", "specialty"]);
@@ -55,28 +33,35 @@ Parse.Cloud.define("listSurveys", async (request) => {
 	const limit = Math.min(Math.max(Number(request.params.limit) || 100, 1), 1000);
 	const skip = Math.max(Number(request.params.skip) || 0, 0);
 	const currentUser = await getCurrentUser(request.user);
-	const hasAllDataAccess = await userHasAdminRole(request.user);
+	const accessScope = dataAccessScopeForRole(currentUser.get("role"));
 
 	let query;
 
-	if (hasAllDataAccess) {
+	if (accessScope === "all") {
 		query = new Parse.Query("Survey");
 	} else {
 		const institution = currentUser.get("institution");
-		const specialty = currentUser.get("specialty");
 
-		if (!institution || !specialty) {
-			throw new Parse.Error(Parse.Error.OPERATION_FORBIDDEN, "Your user account must have an institution and specialty to view surveys.");
+		if (!institution) {
+			throw new Parse.Error(Parse.Error.OPERATION_FORBIDDEN, "Your user account must have an institution to view surveys.");
 		}
 
 		const enrolleeQuery = new Parse.Query("Enrollee");
 		enrolleeQuery.equalTo("institution", institution);
-		enrolleeQuery.equalTo("specialty", specialty);
 
 		const scopedSurveyQuery = new Parse.Query("Survey");
 		scopedSurveyQuery.equalTo("institution", institution);
-		scopedSurveyQuery.equalTo("specialty", specialty);
 		scopedSurveyQuery.doesNotExist("enrollee");
+
+		if (accessScope === "institution_specialty") {
+			const specialty = currentUser.get("specialty");
+			if (!specialty) {
+				throw new Parse.Error(Parse.Error.OPERATION_FORBIDDEN, "Your user account must have a specialty to view surveys.");
+			}
+
+			enrolleeQuery.equalTo("specialty", specialty);
+			scopedSurveyQuery.equalTo("specialty", specialty);
+		}
 
 		const linkedSurveyQuery = new Parse.Query("Survey");
 		linkedSurveyQuery.matchesQuery("enrollee", enrolleeQuery);

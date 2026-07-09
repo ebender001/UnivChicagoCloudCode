@@ -1,10 +1,5 @@
 const { calculateFrailty } = require("./frailtySummary.js");
-
-async function userHasRole(user, roleName) {
-	const userQuery = new Parse.Query(Parse.User);
-	const fullUser = await userQuery.get(user.id, { useMasterKey: true });
-	return fullUser.get("role") === roleName;
-}
+const { dataAccessScopeForRole } = require("./roleAccess.js");
 
 async function getCurrentUser(user) {
 	const query = new Parse.Query(Parse.User);
@@ -23,26 +18,36 @@ Parse.Cloud.define("getEnrolleeSummaryScores", async (request) => {
 	}
 
 	const currentUser = await getCurrentUser(request.user);
-	const isSuperAdmin = await userHasRole(request.user, "super_admin");
+	const accessScope = dataAccessScopeForRole(currentUser.get("role"));
 	const query = new Parse.Query("Enrollee");
 	query.include("survey");
 
 	const enrollee = await query.get(enrolleeId, { useMasterKey: true });
 	const survey = enrollee.get("survey");
 
-	if (!isSuperAdmin) {
+	if (accessScope !== "all") {
 		const institution = currentUser.get("institution");
-		const specialty = currentUser.get("specialty");
 
-		if (!institution || !specialty) {
-			throw new Parse.Error(Parse.Error.OPERATION_FORBIDDEN, "Your user account must have an institution and specialty to view enrollee summary scores.");
+		if (!institution) {
+			throw new Parse.Error(Parse.Error.OPERATION_FORBIDDEN, "Your user account must have an institution to view enrollee summary scores.");
 		}
 
 		const sameInstitution = enrollee.get("institution") && enrollee.get("institution").id === institution.id;
-		const sameSpecialty = enrollee.get("specialty") && enrollee.get("specialty").id === specialty.id;
 
-		if (!sameInstitution || !sameSpecialty) {
-			throw new Parse.Error(Parse.Error.OPERATION_FORBIDDEN, "You can only view enrollees in your institution and specialty.");
+		if (!sameInstitution) {
+			throw new Parse.Error(Parse.Error.OPERATION_FORBIDDEN, "You can only view enrollees in your institution.");
+		}
+
+		if (accessScope === "institution_specialty") {
+			const specialty = currentUser.get("specialty");
+			if (!specialty) {
+				throw new Parse.Error(Parse.Error.OPERATION_FORBIDDEN, "Your user account must have a specialty to view enrollee summary scores.");
+			}
+
+			const sameSpecialty = enrollee.get("specialty") && enrollee.get("specialty").id === specialty.id;
+			if (!sameSpecialty) {
+				throw new Parse.Error(Parse.Error.OPERATION_FORBIDDEN, "You can only view enrollees in your institution and specialty.");
+			}
 		}
 	}
 
