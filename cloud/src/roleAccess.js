@@ -3,6 +3,12 @@ const studyAdminRoleName = "study_admin";
 const inviteAccessLimitRoleName = "study_coordinator";
 const institutionDataAccessRoleName = "study_coordinator";
 
+function normalizeRoleName(roleName) {
+	return typeof roleName === "string"
+		? roleName.trim().toLowerCase().replace(/[\s-]+/g, "_")
+		: "";
+}
+
 function roleOrder(role) {
 	const value = Number(role && role.get("order"));
 	return Number.isFinite(value) ? value : Number.MAX_SAFE_INTEGER;
@@ -57,16 +63,17 @@ async function canInviteRole(currentRoleName, invitedRoleName) {
 }
 
 function hasAllDataAccess(roleName) {
-	return roleName === superAdminRoleName || roleName === studyAdminRoleName;
+	const normalizedRoleName = normalizeRoleName(roleName);
+	return normalizedRoleName === superAdminRoleName || normalizedRoleName === studyAdminRoleName;
 }
 
 function hasInstitutionDataAccess(roleName) {
-	return hasAllDataAccess(roleName) || roleName === institutionDataAccessRoleName;
+	return hasAllDataAccess(roleName) || normalizeRoleName(roleName) === institutionDataAccessRoleName;
 }
 
 function dataAccessScopeForRole(roleName) {
 	if (hasAllDataAccess(roleName)) return "all";
-	if (roleName === institutionDataAccessRoleName) return "institution";
+	if (normalizeRoleName(roleName) === institutionDataAccessRoleName) return "institution";
 	return "institution_specialty";
 }
 

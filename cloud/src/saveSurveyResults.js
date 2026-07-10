@@ -62,6 +62,14 @@ function setActivityFields(survey, payload, config) {
 	setIfPresent(survey, config.targetMonths, toNumber(payload[config.sourceMonths]));
 }
 
+async function loadCurrentUserWithScope(user) {
+	if (!user || !user.id) return null;
+
+	const query = new Parse.Query(Parse.User);
+	query.include(["institution", "specialty"]);
+	return query.get(user.id, { useMasterKey: true });
+}
+
 Parse.Cloud.define("saveSurveyResults", async (request) => {
 	const payload = request.params && (request.params.survey || request.params);
 	if (!payload || typeof payload !== "object") {
@@ -156,9 +164,18 @@ Parse.Cloud.define("saveSurveyResults", async (request) => {
 
 	let enrollee = null;
 	const enrolleeId = payload.enrolleeId || payload.enrolleeObjectId || payload.enrollee;
+	const currentUser = await loadCurrentUserWithScope(request.user);
 	if (request.user && typeof enrolleeId === "string" && enrolleeId.trim()) {
 		enrollee = Parse.Object.extend("Enrollee").createWithoutData(enrolleeId.trim());
 		survey.set("enrollee", enrollee);
+	}
+
+	if (currentUser) {
+		const institution = currentUser.get("institution");
+		const specialty = currentUser.get("specialty");
+
+		if (institution) survey.set("institution", institution);
+		if (specialty) survey.set("specialty", specialty);
 	}
 
 	const acl = request.user ? new Parse.ACL(request.user) : new Parse.ACL();
