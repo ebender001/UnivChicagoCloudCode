@@ -70,6 +70,7 @@ Parse.Cloud.define("login", async (request) => {
 
 	return {
 		objectId: user.id,
+		name: profileUser.get("name") || null,
 		username: profileUser.get("username"),
 		email: profileUser.get("email") || null,
 		role: profileUser.get("role") || null,
