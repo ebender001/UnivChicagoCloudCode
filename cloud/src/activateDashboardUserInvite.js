@@ -6,7 +6,7 @@ const { setGeneratedPin } = require("./pinUtils.js");
 
 async function ensureUniqueUsername(username, userId) {
 	const query = new Parse.Query(Parse.User);
-	query.equalTo("username", username);
+	query.matches("username", new RegExp(`^${username.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i"));
 
 	const existing = await query.first({ useMasterKey: true });
 	if (existing && existing.id !== userId) {

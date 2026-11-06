@@ -11,7 +11,8 @@ function serializeUser(user, roleDisplayNames) {
 		roleDisplayName: roleDisplayNames[role] || role,
 		institutionName: pointerName(user.get("institution")),
 		specialtyName: pointerName(user.get("specialty")),
-		isActive: user.get("isActive") === true
+		isActive: user.get("isActive") === true,
+		hasPendingInvite: user.get("isActive") !== true && Boolean(user.get("inviteToken"))
 	};
 }
 

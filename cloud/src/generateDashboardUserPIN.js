@@ -1,31 +1,8 @@
 const { setGeneratedPin } = require("./pinUtils.js");
+const { loginWithUsernameOrEmail } = require("./userLookup.js");
 
 function normalizeString(value) {
 	return typeof value === "string" ? value.trim() : "";
-}
-
-async function loginWithUsernameOrEmail(loginName, password) {
-	try {
-		return await Parse.User.logIn(loginName, password);
-	} catch (error) {
-		if (!loginName.includes("@")) {
-			throw new Parse.Error(Parse.Error.OBJECT_NOT_FOUND, "Invalid username or password.");
-		}
-
-		const userQuery = new Parse.Query(Parse.User);
-		userQuery.equalTo("email", loginName);
-
-		const userByEmail = await userQuery.first({ useMasterKey: true });
-		if (!userByEmail || !userByEmail.get("username")) {
-			throw new Parse.Error(Parse.Error.OBJECT_NOT_FOUND, "Invalid username or password.");
-		}
-
-		try {
-			return await Parse.User.logIn(userByEmail.get("username"), password);
-		} catch (emailLoginError) {
-			throw new Parse.Error(Parse.Error.OBJECT_NOT_FOUND, "Invalid username or password.");
-		}
-	}
 }
 
 Parse.Cloud.define("generateDashboardUserPIN", async (request) => {

@@ -1,17 +1,7 @@
+const { findUserByLoginName } = require("./userLookup.js");
+
 function normalizeLoginName(value) {
 	return typeof value === "string" ? value.trim() : "";
-}
-
-async function findUserByLoginName(loginName) {
-	const userQuery = new Parse.Query(Parse.User);
-
-	if (loginName.includes("@")) {
-		userQuery.equalTo("email", loginName.toLowerCase());
-	} else {
-		userQuery.equalTo("username", loginName);
-	}
-
-	return userQuery.first({ useMasterKey: true });
 }
 
 Parse.Cloud.define("requestDashboardPasswordReset", async (request) => {

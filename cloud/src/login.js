@@ -1,3 +1,5 @@
+const { loginWithUsernameOrEmail } = require("./userLookup.js");
+
 Parse.Cloud.define("login", async (request) => {
 	const { username, password } = request.params || {};
 
@@ -10,41 +12,7 @@ Parse.Cloud.define("login", async (request) => {
 	}
 
 	const loginName = username.trim();
-	let user;
-
-	try {
-		user = await Parse.User.logIn(loginName, password);
-	} catch (error) {
-		console.log("Login failed with submitted username.", {
-			code: error.code,
-			username: loginName
-		});
-
-		if (!loginName.includes("@")) {
-			throw new Parse.Error(Parse.Error.OBJECT_NOT_FOUND, "Invalid username or password.");
-		}
-
-		// Allow staff to enter email even when Parse username is a separate value.
-		const userQuery = new Parse.Query(Parse.User);
-		userQuery.equalTo("email", loginName);
-
-		const userByEmail = await userQuery.first({ useMasterKey: true });
-		if (!userByEmail || !userByEmail.get("username")) {
-			throw new Parse.Error(Parse.Error.OBJECT_NOT_FOUND, "Invalid username or password.");
-		}
-
-		try {
-			user = await Parse.User.logIn(userByEmail.get("username"), password);
-		} catch (emailLoginError) {
-			console.log("Login failed after resolving email to username.", {
-				code: emailLoginError.code,
-				email: loginName,
-				resolvedUsername: userByEmail.get("username")
-			});
-
-			throw new Parse.Error(Parse.Error.OBJECT_NOT_FOUND, "Invalid username or password.");
-		}
-	}
+	const user = await loginWithUsernameOrEmail(loginName, password);
 
 	let profileUser = user;
 

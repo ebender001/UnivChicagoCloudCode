@@ -13,6 +13,7 @@ require("./src/downloadActivityData.js");
 require("./src/downloadFrailtyScores.js");
 require("./src/listInviteOptions.js");
 require("./src/createDashboardUserInvite.js");
+require("./src/resendDashboardUserInvite.js");
 require("./src/activateDashboardUserInvite.js");
 require("./src/generateDashboardUserPIN.js");
 require("./src/requestDashboardPasswordReset.js");

@@ -213,3 +213,5 @@ Parse.Cloud.define("createDashboardUserInvite", async (request) => {
 		inviteExpiresAt
 	};
 });
+
+module.exports = { randomToken, sendInviteEmail, getFullUser };
