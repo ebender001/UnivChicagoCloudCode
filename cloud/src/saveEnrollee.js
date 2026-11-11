@@ -53,11 +53,6 @@ Parse.Cloud.define("saveEnrollee", async (request) => {
 		throw new Parse.Error(Parse.Error.VALIDATION_ERROR, "Enrollee payload is required.");
 	}
 
-	const enrolleeNumber = typeof payload.enrolleeNumber === "string" ? payload.enrolleeNumber.trim() : "";
-	if (!/^\d{8}$/.test(enrolleeNumber)) {
-		throw new Parse.Error(Parse.Error.VALIDATION_ERROR, "An 8 digit enrollee number is required.");
-	}
-
 	const Enrollee = Parse.Object.extend("Enrollee");
 	let enrollee = new Enrollee();
 	let existingEnrolleeId = null;
@@ -67,20 +62,6 @@ Parse.Cloud.define("saveEnrollee", async (request) => {
 		existingEnrolleeId = payload.enrolleeId.trim();
 		enrollee = await enrolleeQuery.get(existingEnrolleeId, { useMasterKey: true });
 	}
-
-	const duplicateEnrolleeQuery = new Parse.Query("Enrollee");
-	duplicateEnrolleeQuery.equalTo("enrolleeNumber", enrolleeNumber);
-	const duplicateEnrollee = await duplicateEnrolleeQuery.first({ useMasterKey: true });
-	if (duplicateEnrollee && duplicateEnrollee.id !== existingEnrolleeId) {
-		throw new Parse.Error(
-			Parse.Error.VALIDATION_ERROR,
-			"That enrollee number already exists. Generate a new enrollee number if this is a new patient."
-		);
-	}
-
-	setIfPresent(enrollee, "enrolleeNumber", enrolleeNumber);
-	setIfPresent(enrollee, "startDate", toDate(payload.startDate));
-	setIfPresent(enrollee, "stopDate", toDate(payload.stopDate));
 
 	const gripCompleted = toBoolean(payload.canCompleteGripTest);
 	const gaitCompleted = toBoolean(payload.canCompleteGaitTest);

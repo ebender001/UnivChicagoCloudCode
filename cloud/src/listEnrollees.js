@@ -75,6 +75,13 @@ Parse.Cloud.define("listEnrollees", async (request) => {
 		}
 	}
 
+	// Optional filter: true = enrollees with a linked survey, false = gait and grip only (no survey).
+	if (request.params.surveyLinked === true) {
+		query.exists("survey");
+	} else if (request.params.surveyLinked === false) {
+		query.doesNotExist("survey");
+	}
+
 	const enrollees = await query.find({ useMasterKey: true });
 	const total = await query.count({ useMasterKey: true });
 
